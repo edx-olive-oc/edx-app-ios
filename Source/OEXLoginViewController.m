@@ -79,7 +79,7 @@
 @implementation OEXLoginViewController
 
 - (void)layoutSubviews {
-    if(!([self isFacebookEnabled] || [self isGoogleEnabled])) {
+    if(!([self isFacebookEnabled] || [self isGoogleEnabled] || [self isSamlProviderEnabled])) {
         self.lbl_OrSignIn.hidden = YES;
         self.seperatorLeft.hidden = YES;
         self.seperatorRight.hidden = YES;
@@ -121,6 +121,9 @@
 - (BOOL)isGoogleEnabled {
     return ![OEXNetworkUtility isOnZeroRatedNetwork] && [self.environment.config googleConfig].enabled;
 }
+- (BOOL)isSamlProviderEnabled {
+    return ![OEXNetworkUtility isOnZeroRatedNetwork] && [self.environment.config samlProviderConfig].enabled;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -133,6 +136,9 @@
     }
     if([self isFacebookEnabled]) {
         [providers addObject:[[OEXFacebookAuthProvider alloc] init]];
+    }
+    if([self isSamlProviderEnabled]) {
+        [providers addObject:[[SamlAuthProvider alloc] initWithEnvironment:self.environment]];
     }
 
     __weak __typeof(self) owner = self;
@@ -217,6 +223,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self handleSamlLogin];
 
     //Analytics Screen record
     [[OEXAnalytics sharedAnalytics] trackScreenWithName:@"Login"];
@@ -441,6 +448,12 @@
                                                        onViewController:self.navigationController
                                                             ];
         self.authProvider = nil;
+        return;
+    }
+    
+    if ([provider isKindOfClass:[SamlAuthProvider class]]) {
+        SamlAuthProvider *samlProvider = provider;
+        [samlProvider initializeSamlViewControllerWithView:self];
         return;
     }
     
@@ -694,6 +707,14 @@
 
 - (UIInterfaceOrientationMask) supportedInterfaceOrientations {
     return UIInterfaceOrientationMaskAllButUpsideDown;
+}
+
+- (void)handleSamlLogin {
+    NSHTTPCookie *cookie = self.environment.session.sessionCookie;
+    OEXUserDetails *userDetails = self.environment.session.currentUser;
+    if (userDetails && cookie) {
+        [self didLogin];
+    }
 }
 
 
